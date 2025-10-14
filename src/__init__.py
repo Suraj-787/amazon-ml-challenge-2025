@@ -3,7 +3,7 @@ ML Challenge 2025 - DeBERTa-V3-Large Price Prediction Package
 Team Monk Builders
 
 This package implements a state-of-the-art price prediction model using
-DeBERTa-V3-Large following the strategy outlined in plan.md.
+DeBERTa-V3-Large following the strategy outlined in docs/plan.md.
 
 Main Components:
 - deberta_price_predictor: Core model implementation

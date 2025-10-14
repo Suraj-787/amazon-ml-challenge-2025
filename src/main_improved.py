@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Improved DeBERTa Price Prediction Model with Feature Engineering
-Implements all improvements from plan.md:
+Implements all improvements from docs/plan.md:
 1. Feature Engineering - Extract structured features from catalog_content
 2. Multimodal Model - Combine text embeddings with numerical features
 3. Mean Pooling - Option to use mean pooling instead of [CLS] token

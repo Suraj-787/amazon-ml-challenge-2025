@@ -3,7 +3,7 @@
 Comprehensive DeBERTa-V3-Large Price Prediction Model
 Team Monk Builders - ML Challenge 2025
 
-This script implements the complete pipeline following plan.md strategy:
+This script implements the complete pipeline following docs/plan.md strategy:
 - DeBERTa-V3-Large (304M parameters) for text understanding
 - Log-space training for price prediction
 - Differential learning rates for encoder vs head
@@ -56,7 +56,7 @@ logger = logging.getLogger(__name__)
 
 
 class ModelConfig:
-    """Model configuration following the plan.md strategy"""
+    """Model configuration following the docs/plan.md strategy"""
 
     # Model architecture (using base model for speed and memory efficiency)
     MODEL_NAME = (

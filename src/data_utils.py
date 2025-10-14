@@ -79,7 +79,7 @@ class DataPreprocessor:
     def parse_catalog_content(self, text: str) -> dict:
         """
         Parse catalog_content to extract structured features
-        This is the key improvement from plan.md
+        This is the key improvement from docs/plan.md
         """
         data = {}
         
@@ -162,7 +162,7 @@ class DataPreprocessor:
                 f"Removed {before_price_filter - after_price_filter} rows with missing prices"
             )
 
-        # Extract structured features (KEY IMPROVEMENT from plan.md)
+        # Extract structured features (KEY IMPROVEMENT from docs/plan.md)
         if self.extract_features:
             logger.info("Extracting structured features from catalog_content...")
             parsed_df = df['catalog_content'].apply(lambda x: pd.Series(self.parse_catalog_content(x)))

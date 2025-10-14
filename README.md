@@ -1,169 +1,146 @@
-# ML Challenge 2025 - Team Monk Builders
+# Smart Product Pricing — Amazon ML Challenge 2025
 
-**Team Members:** Suraj Kumar, Himanshu Rai, Pratik Gautam, Impana KS
+Predicting product prices from catalog text and product images, using a fine-tuned DeBERTa-v3 text model and a CLIP + LoRA image model.
 
-## 🎯 Improved DeBERTa Price Prediction
+**Team Monk Builders:** Suraj Kumar, Himanshu Rai, Pratik Gautam, Impana KS
 
-This solution implements **all key improvements from plan.md** for significantly better performance:
+## Problem
 
-1. ✅ **Feature Engineering** - Extract value, unit, pack_count from text
-2. ✅ **Multimodal Architecture** - Combine text + numerical features
-3. ✅ **K-Fold Cross-Validation** - 5-fold CV with ensemble
-4. ✅ **Mean Pooling** - Optional alternative to CLS token
+Each product comes with free-form catalog content (item name, bullet points, description, and a value/unit such as `Value: 72.0 Unit: Fl Oz`) and an image link. The task is to predict its price.
 
-**Expected Improvement:** 18-33% SMAPE reduction (from ~48% to 32-39%)
+| Split | Rows | Columns |
+|---|---|---|
+| Train | 75,000 | `sample_id`, `catalog_content`, `image_link`, `price` |
+| Test | 75,000 | `sample_id`, `catalog_content`, `image_link` |
 
-## 🚀 One Command to Run Everything
+Submissions are scored with **SMAPE** (Symmetric Mean Absolute Percentage Error) — lower is better.
+
+> The competition dataset is not included in this repository. Place `train.csv` and `test.csv` in `data/` before running anything.
+
+## Approach
+
+The work went through three stages. The process docs for each stage are in [`docs/`](docs/).
+
+### 1. Baseline: DeBERTa-v3-large regressor
+
+- Fine-tuned `microsoft/deberta-v3-large` on cleaned catalog text (HTML removal, unicode normalisation, whitespace cleaning), max length 256.
+- 3-layer regression head (1024 → 512 → 256 → 1, GELU, dropout 0.1).
+- Trained on `log(price + 1)` with MSE loss and differential learning rates (encoder 1e-5, head 1e-3).
+- Write-up: [docs/baseline-submission.md](docs/baseline-submission.md)
+
+### 2. Improved text pipeline
+
+A review of the baseline ([docs/plan.md](docs/plan.md)) showed the model was being asked to read numbers like pack size and volume as plain tokens. The improved pipeline ([docs/what-was-done.md](docs/what-was-done.md)):
+
+- **Feature engineering** — parses `catalog_content` into `value`, `unit` (one-hot) and `pack_count` (standardised), plus a `clean_text` field for the transformer.
+- **Multimodal head** — concatenates the DeBERTa embedding with the numerical features before the regression head.
+- **Mean pooling** — optional alternative to the CLS token.
+- **5-fold cross-validation** — trains five models and averages their test predictions.
+
+Code: [`src/main_improved.py`](src/main_improved.py), [`src/data_utils.py`](src/data_utils.py), [`src/deberta_price_predictor.py`](src/deberta_price_predictor.py)
+
+### 3. Image model: CLIP + LoRA
+
+An independent image-based predictor ([docs/image-plan.md](docs/image-plan.md)) that can be ensembled with the text model:
+
+- Frozen `openai/clip-vit-large-patch14` vision encoder with LoRA adapters (rank 16) on the attention `q_proj`/`v_proj` layers, plus a regression head.
+- Images streamed directly from S3; bf16 and `torch.compile` for H100 throughput.
+
+Code and usage: [`image_model/`](image_model/README.md)
+
+## Results
+
+| Model | Validation SMAPE | Status |
+|---|---|---|
+| Baseline DeBERTa-v3-large (single split) | **49.23%** | Measured, submitted 13 Oct 2025 |
+| Improved text pipeline (5-fold ensemble) | 32–39% | Target from the improvement plan; not yet recorded |
+| CLIP + LoRA image model | 25–35% | Target; not yet recorded |
+
+Running either pipeline writes its actual metrics to the output folder (`kfold_results.json` for the text model).
+
+## How to Run
+
+Requirements: Python 3.12+, an NVIDIA GPU (the defaults are tuned for an H100 80GB), and [uv](https://docs.astral.sh/uv/) (the setup script installs it if missing).
+
+### Text model
 
 ```bash
+# Full pipeline: setup, feature extraction, 5-fold training, ensemble submission
 ./scripts/setup-and-run.sh
-```
 
-This will:
-1. ✅ Check prerequisites and install dependencies
-2. ✅ Extract structured features from catalog_content
-3. ✅ Train 5 models with k-fold cross-validation
-4. ✅ Create ensemble predictions
-5. ✅ Save submission.csv
-
-**Expected Time:** 1-2 hours on H100 80GB GPU
-
-## ⚡ Quick Test (Fast)
-
-```bash
+# Quick check: single split, no k-fold (~30–60 min)
 ./scripts/setup-and-run.sh --quick
+
+# Other modes
+./scripts/setup-and-run.sh --setup-only   # install environment only
+./scripts/setup-and-run.sh --status       # show environment / GPU status
 ```
 
-Runs in ~30-60 minutes without k-fold.
+The full 5-fold run takes roughly 2.5–5 hours on a single H100.
 
-## 📊 What Was Improved
-
-### 1. Feature Engineering
-**Before:** Model sees "Value: 72.0 Unit: Fl Oz" as text  
-**After:** Model gets explicit features: value=72.0, unit=fl_oz, pack_count=6
-
-### 2. Multimodal Architecture
-**Before:** Only text embeddings → regression head  
-**After:** Text embeddings + numerical features → regression head
-
-### 3. K-Fold Cross-Validation
-**Before:** Single model on one train/val split  
-**After:** 5 models on different splits, ensemble predictions
-
-### 4. Mean Pooling
-**Before:** Only CLS token  
-**After:** Optional mean pooling over all tokens
-
-## 📁 Project Structure
-
-```
-ml-challenge-2025/
-├── src/
-│   ├── main_improved.py           # 🆕 Improved pipeline with k-fold CV
-│   ├── data_utils.py              # ✨ Updated with feature extraction
-│   ├── deberta_price_predictor.py # ✨ Updated with multimodal support
-│   ├── config.py                  # Model configuration
-│   └── evaluation.py              # Metrics and evaluation
-├── scripts/
-│   ├── quick-start.sh             # Quick setup
-│   └── setup-and-run.sh           # ✨ Updated for improved pipeline
-├── data/
-│   ├── train.csv                  # Training data
-│   └── test.csv                   # Test data
-├── output/
-│   └── improved/                  # 🆕 Improved model outputs
-│       └── run_TIMESTAMP/
-│           ├── submission.csv     # Final predictions
-│           ├── kfold_results.json # K-fold metrics
-│           └── fold_1/ ... fold_5/ # Individual models
-└── pyproject.toml                 # Dependencies
-```
-
-## 🎯 Model Architecture (H100 Optimized)
-
-- **Base Model:** microsoft/deberta-v3-large (304M parameters)
-- **Batch Size:** 64 (optimized for H100 80GB)
-- **Training:** 5-fold CV × 3 epochs = 15 epochs total
-- **Feature Engineering:** Extract value, unit, pack_count
-- **Multimodal Input:** Text embeddings (1024 dim) + numerical features
-- **Pooling:** CLS token or mean pooling (configurable)
-- **Regression Head:** 3-layer MLP with GELU activation
-- **Training:** 5-fold CV with ensemble predictions
-
-## 📈 Expected Performance
-
-| Metric | Before | After (Expected) | Improvement |
-|--------|--------|------------------|-------------|
-| SMAPE | ~48% | 28-36% | 25-40% reduction |
-| Training | Single model | 5-model ensemble | More robust |
-| Features | Text only | Text + numerical | Better predictions |
-| Model | Base (86M) | Large (304M) | Better accuracy |
-| Hardware | Generic | H100 optimized | 2-4x faster |
-
-## 💻 Manual Run (if needed)
+Manual run:
 
 ```bash
-# Setup environment
-./scripts/setup-and-run.sh --setup-only
-
-# Activate environment
 source .venv/bin/activate
-
-# Run improved pipeline
-python3 src/main_improved.py
-
-# Or without k-fold (faster)
-python3 src/main_improved.py --no-kfold
-
-# With mean pooling
-python3 src/main_improved.py --use-mean-pooling
+python3 src/main_improved.py                      # 5-fold CV + ensemble
+python3 src/main_improved.py --no-kfold           # single split
+python3 src/main_improved.py --use-mean-pooling   # mean pooling instead of CLS
+python3 src/main_improved.py --model-name microsoft/deberta-v3-base   # smaller model
 ```
 
-## 🔍 Check Status
+Re-generate a submission from saved fold models:
 
 ```bash
-./scripts/setup-and-run.sh --status
+./scripts/predict.sh output/improved/run_TIMESTAMP [n_folds]
 ```
 
-## 📊 Output
+Output:
 
-After training, find your results in:
 ```
 output/improved/run_TIMESTAMP/
-├── submission.csv          # Submit this!
-├── kfold_results.json     # CV metrics
-├── config.json            # Training config
-└── fold_1/ ... fold_5/    # Individual models
+├── submission.csv        # predictions for test.csv
+├── kfold_results.json    # per-fold and mean ± std SMAPE
+├── config.json           # training configuration
+└── fold_1/ … fold_5/     # fold models
 ```
 
-## 🎓 Key Improvements Explained
+### Image model
 
-### Feature Extraction
-Parses catalog_content to extract:
-- `value`: Product size/amount (e.g., 11.4)
-- `unit`: Measurement unit (e.g., "fl oz") - one-hot encoded
-- `pack_count`: Number of items (e.g., 6 from "Pack of 6")
-- `clean_text`: Structured text for DeBERTa
+Needs AWS credentials with read access to the image bucket configured in [`image_model/config.py`](image_model/config.py).
 
-### Multimodal Architecture
-Combines semantic understanding (text) with explicit numerical features for better predictions.
+```bash
+./image_model/setup.sh
+python image_model/verify_setup.py      # optional
+./image_model/run_training.sh           # or --quick
+```
 
-### K-Fold Ensemble
-Trains 5 models on different data splits and averages predictions for more robust results.
+Predictions are written to `image_model/output/submission_*.csv`.
 
-## 📚 Documentation
+### Utilities
 
-- **RUN_INSTRUCTIONS.md** - Detailed run instructions
-- **WHAT_WAS_DONE.md** - Summary of improvements
-- **plan.md** - Original improvement recommendations
+```bash
+python scripts/check_data_preprocessing.py   # sanity-check feature extraction on the data
+./scripts/fix_permissions.sh                 # fix write permissions on output/
+```
 
-## 🤝 Team Contributions
+## Project Structure
 
-- **Suraj Kumar**: Model architecture and improvements
-- **Himanshu Rai**: Feature engineering and data preprocessing
-- **Pratik Gautam**: K-fold CV and evaluation
-- **Impana KS**: Documentation and testing
-
----
-
-**Team Monk Builders** | ML Challenge 2025 | Improved Pipeline 🚀
+```
+├── src/                          # Text model
+│   ├── main_improved.py          # Improved pipeline (features + k-fold ensemble)
+│   ├── main.py                   # Original baseline pipeline
+│   ├── predict_ensemble.py       # Predict with saved fold models
+│   ├── data_utils.py             # Cleaning + catalog feature extraction
+│   ├── deberta_price_predictor.py# Dataset, model and trainer
+│   ├── evaluation.py             # SMAPE and per-price-range metrics
+│   └── config.py                 # Hyperparameters
+├── image_model/                  # CLIP + LoRA image model
+├── scripts/                      # Setup, run, predict and utility scripts
+├── docs/                         # Development process
+│   ├── baseline-submission.md    # Baseline write-up and score
+│   ├── plan.md                   # Text model improvement plan
+│   ├── what-was-done.md          # What the improved pipeline changed
+│   └── image-plan.md             # Image model plan
+├── data/                         # train.csv / test.csv (not tracked)
+└── pyproject.toml
+```

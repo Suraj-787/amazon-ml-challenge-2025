@@ -1,13 +1,13 @@
 """
 Configuration file for DeBERTa price prediction model
-Contains all hyperparameters and settings as specified in plan.md
+Contains all hyperparameters and settings as specified in docs/plan.md
 """
 
 import torch
 
 
 class ModelConfig:
-    """Model configuration following the plan.md strategy"""
+    """Model configuration following the docs/plan.md strategy"""
 
     # Model architecture
     MODEL_NAME = "microsoft/deberta-v3-large"  # 304M parameters - perfect for A10G
@@ -55,7 +55,7 @@ class ModelConfig:
 
     @classmethod
     def get_regression_head_config(cls):
-        """Get regression head architecture as per plan.md"""
+        """Get regression head architecture as per docs/plan.md"""
         return {
             "input_size": 1024,  # DeBERTa-V3-Large hidden size
             "layer1_size": 512,
